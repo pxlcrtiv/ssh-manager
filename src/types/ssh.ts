@@ -11,6 +11,7 @@ export interface SSHHost {
   lastConnected?: Date;
   tags: string[];
   description?: string;
+  isActive?: boolean;
 }
 
 export interface SSHConnection {

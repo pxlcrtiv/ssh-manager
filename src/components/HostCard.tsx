@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SSHHost } from '@/types/ssh';
+import { useSSHConnections } from '@/hooks/useSSHConnections';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,15 +22,33 @@ interface HostCardProps {
   onDelete: (id: string) => void;
   onConnect: (host: SSHHost) => void;
   onSFTP: (host: SSHHost) => void;
+  isConnected: boolean;
 }
 
-export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP }: HostCardProps) => {
+export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP, isConnected }: HostCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { isHostConnected, getConnectionByHostId } = useSSHConnections();
 
   const getStatusColor = () => {
-    // Mock connection status for demo
-    const isConnected = Math.random() > 0.7;
     return isConnected ? 'success' : 'secondary';
+  };
+
+  const formatConnectedTime = () => {
+    const connection = getConnectionByHostId(host.id);
+    if (!connection || !connection.connectedAt) return null;
+    
+    const now = new Date();
+    const connectedAt = new Date(connection.connectedAt);
+    const diffMinutes = Math.floor((now.getTime() - connectedAt.getTime()) / (1000 * 60));
+    
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
   };
 
   const formatLastConnected = (date?: Date) => {
@@ -53,9 +72,12 @@ export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP }: HostCard
         <div className="flex items-center gap-2">
           <Server className="h-5 w-5 text-primary" />
           <h3 className="font-semibold text-lg">{host.name}</h3>
-          <Badge variant={getStatusColor() as any}>
+          <Badge 
+            variant={getStatusColor() as any}
+            className={isConnected ? "connection-status-connected" : ""}
+          >
             <Wifi className="h-3 w-3 mr-1" />
-            {Math.random() > 0.7 ? 'Connected' : 'Offline'}
+            {isConnected ? 'Connected' : 'Offline'}
           </Badge>
         </div>
         <div className="flex gap-1">
@@ -101,6 +123,13 @@ export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP }: HostCard
           </div>
         )}
 
+        {isConnected && (
+          <div className="flex items-center gap-2 text-xs text-success">
+            <Wifi className="h-3 w-3" />
+            <span>Connected {formatConnectedTime()}</span>
+          </div>
+        )}
+
         {host.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {host.tags.map((tag, index) => (
@@ -114,13 +143,13 @@ export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP }: HostCard
 
       <div className="flex gap-2">
         <Button 
-          variant="terminal" 
+          variant={isConnected ? "destructive" : "terminal"} 
           size="sm" 
           onClick={() => onConnect(host)}
           className="flex-1"
         >
           <Terminal className="h-4 w-4 mr-2" />
-          SSH
+          {isConnected ? 'Disconnect' : 'SSH'}
         </Button>
         <Button 
           variant="outline" 

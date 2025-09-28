@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { SSHHost } from '@/types/ssh';
 import { useSSHHosts } from '@/hooks/useSSHHosts';
+import { useSSHConnections } from '@/hooks/useSSHConnections';
 import { HostCard } from '@/components/HostCard';
 import { HostDialog } from '@/components/HostDialog';
 import { SFTPBrowser } from '@/components/SFTPBrowser';
+import { ConnectionPanel } from '@/components/ConnectionPanel';
 import { ImportExport } from '@/components/ImportExport';
 import { BackupNotification } from '@/components/BackupNotification';
 import { BackupSettings } from '@/components/BackupSettings';
@@ -21,10 +23,12 @@ import {
   Download,
   Upload
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 
 const Index = () => {
   const { hosts, addHost, updateHost, deleteHost } = useSSHHosts();
+  const { getActiveConnections, addConnection, removeConnection, isHostConnected, connections } = useSSHConnections();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedHost, setSelectedHost] = useState<SSHHost | undefined>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -57,11 +61,26 @@ const Index = () => {
   };
 
   const handleConnect = (host: SSHHost) => {
-    toast({
-      title: "SSH Connection",
-      description: `Connecting to ${host.name}...`,
-    });
-    // In a real app, this would open an SSH terminal
+    const isConnected = isHostConnected(host.id);
+    
+    if (isConnected) {
+      // Disconnect if already connected
+      const connection = getActiveConnections().find(conn => conn.hostId === host.id);
+      if (connection) {
+        removeConnection(connection.id);
+        toast({
+          title: "SSH Connection Closed",
+          description: `Disconnected from ${host.name}`,
+        });
+      }
+    } else {
+      // Connect if not connected
+      addConnection(host.id);
+      toast({
+        title: "SSH Connection",
+        description: `Connecting to ${host.name}...`,
+      });
+    }
   };
 
   const handleSFTP = (host: SSHHost) => {
@@ -69,8 +88,7 @@ const Index = () => {
   };
 
   const getTotalConnections = () => {
-    // Mock active connections
-    return Math.floor(Math.random() * 3);
+    return getActiveConnections().length;
   };
 
   if (sftpHost) {
@@ -94,13 +112,42 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="hidden sm:flex">
+              <Badge 
+                variant={getTotalConnections() > 0 ? "default" : "outline"} 
+                className="hidden sm:flex"
+              >
                 <Server className="h-3 w-3 mr-1" />
                 {hosts.length} hosts
               </Badge>
-              <Badge variant={getTotalConnections() > 0 ? "success" : "secondary"}>
-                {getTotalConnections()} active
-              </Badge>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Badge 
+                      variant={getTotalConnections() > 0 ? "success" : "secondary"}
+                      className={getTotalConnections() > 0 ? "animate-pulse cursor-pointer connection-status-connected" : "cursor-pointer"}
+                    >
+                      {getTotalConnections()} active
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {getTotalConnections() > 0 ? (
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Active Connections:</p>
+                        {getActiveConnections().map(conn => {
+                          const host = hosts.find(h => h.id === conn.hostId);
+                          return (
+                            <p key={conn.id} className="text-xs">
+                              {host?.name || 'Unknown Host'}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p>No active SSH connections</p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <Button
                 variant="ghost"
                 size="icon"
@@ -114,6 +161,7 @@ const Index = () => {
       </header>
 
       <div className="container mx-auto px-4 py-6">
+        <ConnectionPanel />
         {showSettings && (
           <div className="mb-6">
             <Tabs defaultValue="import-export" className="w-full">
@@ -190,6 +238,7 @@ const Index = () => {
                 onDelete={deleteHost}
                 onConnect={handleConnect}
                 onSFTP={handleSFTP}
+                isConnected={isHostConnected(host.id)}
               />
             ))}
           </div>

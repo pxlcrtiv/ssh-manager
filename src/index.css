@@ -156,4 +156,29 @@ All colors MUST be HSL for perfect AMOLED optimization
   .accent-gradient {
     background: var(--gradient-accent);
   }
+  
+  /* Connection status animations */
+  .connection-pulse {
+    animation: connection-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes connection-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: .5;
+    }
+  }
+  
+  .connection-status-connected {
+    background: hsl(var(--success));
+    box-shadow: 0 0 10px hsl(var(--success) / 0.5);
+  }
+  
+  .connection-status-connecting {
+    background: hsl(var(--warning));
+    box-shadow: 0 0 10px hsl(var(--warning) / 0.5);
+    animation: connection-pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
 }
