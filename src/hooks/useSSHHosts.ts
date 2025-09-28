@@ -94,26 +94,92 @@ export const useSSHHosts = () => {
     }
   };
 
+  const validateFileContent = (data: any): data is DatabaseExport => {
+    // Check basic structure
+    if (!data || typeof data !== 'object') return false;
+    
+    // Validate hosts array
+    if (!Array.isArray(data.hosts)) return false;
+    
+    // Validate each host
+    for (const host of data.hosts) {
+      if (!host || typeof host !== 'object') return false;
+      if (typeof host.id !== 'string' || !host.id.trim()) return false;
+      if (typeof host.name !== 'string' || !host.name.trim()) return false;
+      if (typeof host.hostname !== 'string' || !host.hostname.trim()) return false;
+      if (typeof host.port !== 'number' || host.port < 1 || host.port > 65535) return false;
+      if (typeof host.username !== 'string' || !host.username.trim()) return false;
+      
+      // Sanitize string fields
+      host.name = host.name.substring(0, 100).trim();
+      host.hostname = host.hostname.substring(0, 255).trim();
+      host.username = host.username.substring(0, 100).trim();
+      if (host.password) host.password = host.password.substring(0, 500);
+      if (host.privateKey) host.privateKey = host.privateKey.substring(0, 10000);
+      if (host.passphrase) host.passphrase = host.passphrase.substring(0, 500);
+    }
+    
+    return true;
+  };
+
   const importFromFile = async (file: File) => {
     setLoading(true);
     try {
-      const text = await file.text();
-      const data: DatabaseExport = JSON.parse(text);
-      
-      if (data.hosts && Array.isArray(data.hosts)) {
-        setHosts(data.hosts);
-        toast({
-          title: "Import Successful",
-          description: `Imported ${data.hosts.length} hosts`,
-        });
-      } else {
-        throw new Error('Invalid file format');
+      // File validation
+      const maxSize = 10 * 1024 * 1024; // 10MB limit
+      if (file.size > maxSize) {
+        throw new Error('File too large. Maximum size is 10MB.');
       }
+
+      // MIME type validation
+      const allowedTypes = ['application/json', 'text/plain', 'application/octet-stream'];
+      if (!allowedTypes.includes(file.type) && file.type !== '') {
+        throw new Error('Invalid file type. Only JSON files are allowed.');
+      }
+
+      // File extension validation
+      const allowedExtensions = ['.json', '.sqlite', '.db'];
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+      if (!allowedExtensions.includes(fileExtension)) {
+        throw new Error('Invalid file extension. Only .json, .sqlite, .db files are allowed.');
+      }
+
+      const text = await file.text();
+      
+      // Size check after reading
+      if (text.length > maxSize) {
+        throw new Error('File content too large.');
+      }
+
+      // JSON parsing with error handling
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        throw new Error('Invalid JSON format.');
+      }
+
+      // Content validation
+      if (!validateFileContent(data)) {
+        throw new Error('Invalid file structure. Please ensure the file contains valid host data.');
+      }
+
+      // Additional security: limit number of hosts
+      if (data.hosts.length > 1000) {
+        throw new Error('Too many hosts in file. Maximum 1000 hosts allowed.');
+      }
+
+      setHosts(data.hosts);
+      toast({
+        title: "Import Successful",
+        description: `Imported ${data.hosts.length} hosts`,
+      });
     } catch (error) {
       console.error('Import error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Import Failed",
-        description: "Could not import hosts data. Please check the file format.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
