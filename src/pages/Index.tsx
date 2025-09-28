@@ -10,13 +10,16 @@ import { BackupSettings } from '@/components/BackupSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { 
   Plus, 
   Search, 
   Terminal, 
   Server,
   Settings,
-  Filter
+  Filter,
+  Download,
+  Upload
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -27,7 +30,6 @@ const Index = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [sftpHost, setSftpHost] = useState<SSHHost | undefined>();
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'import-export' | 'backup'>('import-export');
 
   const filteredHosts = hosts.filter(host =>
     host.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -114,23 +116,24 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {showSettings && (
           <div className="mb-6">
-            <div className="flex items-center gap-4 mb-4">
-              <Button 
-                variant={settingsTab === 'import-export' ? 'terminal' : 'ghost'}
-                size="sm"
-                onClick={() => setSettingsTab('import-export')}
-              >
-                Import/Export
-              </Button>
-              <Button 
-                variant={settingsTab === 'backup' ? 'terminal' : 'ghost'}
-                size="sm"
-                onClick={() => setSettingsTab('backup')}
-              >
-                Auto Backup
-              </Button>
-            </div>
-            {settingsTab === 'import-export' ? <ImportExport /> : <BackupSettings />}
+            <Tabs defaultValue="import-export" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="import-export" className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />
+                  Import/Export
+                </TabsTrigger>
+                <TabsTrigger value="backup" className="flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Auto Backup
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="import-export" className="mt-0">
+                <ImportExport />
+              </TabsContent>
+              <TabsContent value="backup" className="mt-0">
+                <BackupSettings />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
 
