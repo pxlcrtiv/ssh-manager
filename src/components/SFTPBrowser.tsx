@@ -15,6 +15,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
 
 interface SFTPBrowserProps {
   host: SSHHost;
@@ -110,10 +111,68 @@ export const SFTPBrowser = ({ host, onClose }: SFTPBrowserProps) => {
 
   const handleRefresh = async () => {
     setLoading(true);
-    // Simulate API call
+    // Simulate API call with dynamic file generation
     setTimeout(() => {
+      const dynamicFiles = [
+        ...mockFiles,
+        {
+          name: `backup_${new Date().toISOString().split('T')[0]}.json`,
+          path: `/home/user/backup_${new Date().toISOString().split('T')[0]}.json`,
+          size: Math.floor(Math.random() * 5000) + 1000,
+          type: 'file' as const,
+          permissions: '-rw-r--r--',
+          owner: 'user',
+          group: 'user',
+          modified: new Date(),
+        },
+        {
+          name: 'temp',
+          path: '/home/user/temp',
+          size: 0,
+          type: 'directory' as const,
+          permissions: 'drwxr-xr-x',
+          owner: 'user',
+          group: 'user',
+          modified: new Date(),
+        }
+      ];
+      setFiles(dynamicFiles);
       setLoading(false);
-    }, 500);
+    }, 800);
+  };
+
+  const handleFileClick = (file: SFTPFile) => {
+    if (file.type === 'directory') {
+      if (file.name === '..') {
+        // Navigate up
+        const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
+        setCurrentPath(parentPath);
+      } else {
+        // Navigate into directory
+        setCurrentPath(file.path);
+      }
+      handleRefresh();
+    }
+  };
+
+  const handleDownload = (file: SFTPFile) => {
+    if (file.type === 'file') {
+      // Simulate file download
+      const blob = new Blob([`Content of ${file.name}`], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "File Downloaded",
+        description: `${file.name} has been downloaded`,
+      });
+    }
   };
 
   return (
@@ -173,6 +232,7 @@ export const SFTPBrowser = ({ host, onClose }: SFTPBrowserProps) => {
             <Card
               key={index}
               className="p-3 hover:bg-muted/50 cursor-pointer transition-colors border-transparent hover:border-primary/20"
+              onClick={() => handleFileClick(file)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -189,7 +249,15 @@ export const SFTPBrowser = ({ host, onClose }: SFTPBrowserProps) => {
                 </div>
                 <div className="flex items-center gap-1">
                   {file.type === 'file' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(file);
+                      }}
+                    >
                       <Download className="h-3 w-3" />
                     </Button>
                   )}

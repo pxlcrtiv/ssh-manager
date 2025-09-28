@@ -5,6 +5,8 @@ import { HostCard } from '@/components/HostCard';
 import { HostDialog } from '@/components/HostDialog';
 import { SFTPBrowser } from '@/components/SFTPBrowser';
 import { ImportExport } from '@/components/ImportExport';
+import { BackupNotification } from '@/components/BackupNotification';
+import { BackupSettings } from '@/components/BackupSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +27,7 @@ const Index = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [sftpHost, setSftpHost] = useState<SSHHost | undefined>();
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'import-export' | 'backup'>('import-export');
 
   const filteredHosts = hosts.filter(host =>
     host.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -111,7 +114,23 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {showSettings && (
           <div className="mb-6">
-            <ImportExport />
+            <div className="flex items-center gap-4 mb-4">
+              <Button 
+                variant={settingsTab === 'import-export' ? 'terminal' : 'ghost'}
+                size="sm"
+                onClick={() => setSettingsTab('import-export')}
+              >
+                Import/Export
+              </Button>
+              <Button 
+                variant={settingsTab === 'backup' ? 'terminal' : 'ghost'}
+                size="sm"
+                onClick={() => setSettingsTab('backup')}
+              >
+                Auto Backup
+              </Button>
+            </div>
+            {settingsTab === 'import-export' ? <ImportExport /> : <BackupSettings />}
           </div>
         )}
 
@@ -181,6 +200,9 @@ const Index = () => {
         onOpenChange={setIsDialogOpen}
         onSave={handleSaveHost}
       />
+
+      {/* Backup Notification */}
+      <BackupNotification />
     </div>
   );
 };
