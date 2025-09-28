@@ -47,6 +47,14 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -84,6 +92,28 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "terminal-pulse": "terminal-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "glow": "glow 2s ease-in-out infinite alternate",
+      },
+      keyframes: {
+        ...{
+          "terminal-pulse": {
+            "0%, 100%": {
+              opacity: "1",
+            },
+            "50%": {
+              opacity: "0.7",
+            },
+          },
+          "glow": {
+            "0%": {
+              "box-shadow": "0 0 20px hsl(var(--primary) / 0.2)",
+            },
+            "100%": {
+              "box-shadow": "0 0 40px hsl(var(--primary) / 0.4)",
+            },
+          },
+        },
       },
     },
   },
