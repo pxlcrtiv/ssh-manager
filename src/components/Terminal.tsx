@@ -57,7 +57,7 @@ drwxr-xr-x  2 user  staff    64 Jan 19 11:30 logs`,
 };
 
 export const Terminal = ({ host, onClose }: TerminalProps) => {
-  const { addConnection, removeConnection, isHostConnected, getConnectionByHostId } = useSSHConnections();
+  const { addConnection, removeConnection, isHostConnected, getConnectionByHostId, connections } = useSSHConnections();
   const [currentPath, setCurrentPath] = useState('/home/user');
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
@@ -76,21 +76,23 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
         setConnectionStatus('connecting');
         
         // Simulate connection process
-        setTimeout(() => {
-          if (!isHostConnected(host.id)) {
-            addConnection(host.id);
+      setTimeout(() => {
+        // Check if any connection exists for this host, regardless of status
+        const hasAnyConnection = connections.some(conn => conn.hostId === host.id);
+        if (!hasAnyConnection) {
+          addConnection(host.id);
+        }
+        setConnectionStatus('connected');
+        
+        // Add welcome message to terminal output
+        setOutput([
+          ...output,
+          {
+            type: 'output',
+            content: `Welcome to SSH Terminal\nConnected to ${host.username}@${host.hostname}:${host.port}\nType 'help' to see available commands.\n`
           }
-          setConnectionStatus('connected');
-          
-          // Add welcome message to terminal output
-          setOutput([
-            ...output,
-            { 
-              type: 'output', 
-              content: `Welcome to SSH Terminal\nConnected to ${host.username}@${host.hostname}:${host.port}\nType 'help' to see available commands.\n` 
-            }
-          ]);
-        }, 1000);
+        ]);
+      }, 1000);
       } catch (error) {
         setConnectionStatus('error');
         toast({
