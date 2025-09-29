@@ -5,23 +5,26 @@ import { useSSHConnections } from '@/hooks/useSSHConnections';
 import { HostCard } from '@/components/HostCard';
 import { HostDialog } from '@/components/HostDialog';
 import { SFTPBrowser } from '@/components/SFTPBrowser';
+import { Terminal } from '@/components/Terminal';
 import { ConnectionPanel } from '@/components/ConnectionPanel';
 import { ImportExport } from '@/components/ImportExport';
 import { BackupNotification } from '@/components/BackupNotification';
 import { BackupSettings } from '@/components/BackupSettings';
+import { EncryptionSettings } from '@/components/EncryptionSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { 
-  Plus, 
-  Search, 
-  Terminal, 
+import {
+  Plus,
+  Search,
+  Terminal as TerminalIcon,
   Server,
   Settings,
   Filter,
   Download,
-  Upload
+  Upload,
+  Shield
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
@@ -33,6 +36,7 @@ const Index = () => {
   const [selectedHost, setSelectedHost] = useState<SSHHost | undefined>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [sftpHost, setSftpHost] = useState<SSHHost | undefined>();
+  const [terminalHost, setTerminalHost] = useState<SSHHost | undefined>();
   const [showSettings, setShowSettings] = useState(false);
 
   const filteredHosts = hosts.filter(host =>
@@ -87,9 +91,17 @@ const Index = () => {
     setSftpHost(host);
   };
 
+  const handleSSH = (host: SSHHost) => {
+    setTerminalHost(host);
+  };
+
   const getTotalConnections = () => {
     return getActiveConnections().length;
   };
+
+  if (terminalHost) {
+    return <Terminal host={terminalHost} onClose={() => setTerminalHost(undefined)} />;
+  }
 
   if (sftpHost) {
     return <SFTPBrowser host={sftpHost} onClose={() => setSftpHost(undefined)} />;
@@ -103,7 +115,7 @@ const Index = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/20 border border-primary/30">
-                <Terminal className="h-6 w-6 text-primary" />
+                <TerminalIcon className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-primary">SSH Terminal</h1>
@@ -165,7 +177,7 @@ const Index = () => {
         {showSettings && (
           <div className="mb-6">
             <Tabs defaultValue="import-export" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="import-export" className="flex items-center gap-2">
                   <Download className="h-4 w-4" />
                   Import/Export
@@ -174,12 +186,19 @@ const Index = () => {
                   <Upload className="h-4 w-4" />
                   Auto Backup
                 </TabsTrigger>
+                <TabsTrigger value="encryption" className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Encryption
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="import-export" className="mt-0">
                 <ImportExport />
               </TabsContent>
               <TabsContent value="backup" className="mt-0">
                 <BackupSettings />
+              </TabsContent>
+              <TabsContent value="encryption" className="mt-0">
+                <EncryptionSettings />
               </TabsContent>
             </Tabs>
           </div>
@@ -230,18 +249,19 @@ const Index = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredHosts.map((host) => (
-              <HostCard
-                key={host.id}
-                host={host}
-                onEdit={handleEditHost}
-                onDelete={deleteHost}
-                onConnect={handleConnect}
-                onSFTP={handleSFTP}
-                isConnected={isHostConnected(host.id)}
-              />
-            ))}
-          </div>
+                {filteredHosts.map((host) => (
+                  <HostCard
+                    key={host.id}
+                    host={host}
+                    onEdit={handleEditHost}
+                    onDelete={deleteHost}
+                    onConnect={handleConnect}
+                    onSSH={handleSSH}
+                    onSFTP={handleSFTP}
+                    isConnected={isHostConnected(host.id)}
+                  />
+                ))}
+              </div>
         )}
       </div>
 

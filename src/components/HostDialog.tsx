@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { sanitizeInput } from '@/lib/securityUtils';
 
 interface HostDialogProps {
   host?: SSHHost;
@@ -62,7 +63,18 @@ export const HostDialog = ({ host, open, onOpenChange, onSave }: HostDialogProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    // Sanitize all user inputs to prevent XSS attacks
+    const sanitizedData = {
+      name: sanitizeInput(formData.name),
+      hostname: sanitizeInput(formData.hostname),
+      port: formData.port,
+      username: sanitizeInput(formData.username),
+      password: formData.password, // Passwords should remain encrypted and not be sanitized
+      privateKey: formData.privateKey, // Private keys should remain as-is
+      description: sanitizeInput(formData.description),
+      tags: formData.tags.map(tag => sanitizeInput(tag)).filter(Boolean),
+    };
+    onSave(sanitizedData);
     onOpenChange(false);
   };
 

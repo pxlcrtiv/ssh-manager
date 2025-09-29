@@ -1,32 +1,61 @@
+/**
+ * SSH Hosts Management Hook with Military-Grade Encryption
+ * Provides secure storage and management of SSH host configurations
+ */
+
 import { useState, useEffect } from 'react';
 import { SSHHost, DatabaseExport } from '@/types/ssh';
 import { toast } from '@/hooks/use-toast';
+import { useSecureStorage } from './useSecureStorage';
 
 export const useSSHHosts = () => {
   const [hosts, setHosts] = useState<SSHHost[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { getItem, setItem, isEncryptionEnabled } = useSecureStorage();
 
-  // Load hosts from localStorage on mount
+  // Load hosts from secure storage on mount
   useEffect(() => {
-    const savedHosts = localStorage.getItem('ssh-hosts');
-    if (savedHosts) {
+    const loadHosts = async () => {
       try {
-        setHosts(JSON.parse(savedHosts));
+        const stored = await getItem('ssh-hosts');
+        if (stored) {
+          const parsedHosts = JSON.parse(stored) as SSHHost[];
+          setHosts(parsedHosts);
+        }
       } catch (error) {
-        console.error('Error loading hosts:', error);
+        console.error('Failed to load hosts:', error);
         toast({
           title: "Error Loading Hosts",
-          description: "Could not load saved SSH hosts.",
+          description: "Failed to load SSH hosts from storage",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHosts();
+  }, [getItem]);
+
+  // Save hosts to secure storage whenever hosts change
+  useEffect(() => {
+    const saveHosts = async () => {
+      try {
+        await setItem('ssh-hosts', JSON.stringify(hosts));
+      } catch (error) {
+        console.error('Error saving hosts:', error);
+        toast({
+          title: "Error Saving Hosts",
+          description: "Could not save SSH hosts to encrypted storage",
           variant: "destructive",
         });
       }
-    }
-  }, []);
+    };
 
-  // Save hosts to localStorage whenever hosts change
-  useEffect(() => {
-    localStorage.setItem('ssh-hosts', JSON.stringify(hosts));
-  }, [hosts]);
+    if (hosts.length > 0) {
+      saveHosts();
+    }
+  }, [hosts, setItem]);
 
   const addHost = (host: Omit<SSHHost, 'id'>) => {
     const newHost: SSHHost = {

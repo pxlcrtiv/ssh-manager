@@ -21,11 +21,12 @@ interface HostCardProps {
   onEdit: (host: SSHHost) => void;
   onDelete: (id: string) => void;
   onConnect: (host: SSHHost) => void;
+  onSSH: (host: SSHHost) => void;
   onSFTP: (host: SSHHost) => void;
   isConnected: boolean;
 }
 
-export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP, isConnected }: HostCardProps) => {
+export const HostCard = ({ host, onEdit, onDelete, onConnect, onSSH, onSFTP, isConnected }: HostCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const { isHostConnected, getConnectionByHostId } = useSSHConnections();
 
@@ -145,7 +146,13 @@ export const HostCard = ({ host, onEdit, onDelete, onConnect, onSFTP, isConnecte
         <Button 
           variant={isConnected ? "destructive" : "terminal"} 
           size="sm" 
-          onClick={() => onConnect(host)}
+          onClick={() => {
+            if (isConnected) {
+              onConnect(host); // Disconnect
+            } else {
+              onSSH(host); // Launch terminal
+            }
+          }}
           className="flex-1"
         >
           <Terminal className="h-4 w-4 mr-2" />
