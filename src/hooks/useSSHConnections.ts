@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { SSHConnection, SSHHost } from '@/types/ssh';
 import { toast } from '@/hooks/use-toast';
 
@@ -6,120 +6,98 @@ export const useSSHConnections = () => {
   const [connections, setConnections] = useState<SSHConnection[]>([]);
   const [connectionHistory, setConnectionHistory] = useState<SSHConnection[]>([]);
 
-  // Load connections from localStorage on mount
-  useEffect(() => {
-    const savedConnections = localStorage.getItem('ssh-connections');
-    if (savedConnections) {
-      try {
-        const parsedConnections = JSON.parse(savedConnections);
-        // Parse dates from strings
-        const connectionsWithDates = parsedConnections.map((conn: any) => ({
-          ...conn,
-          connectedAt: conn.connectedAt ? new Date(conn.connectedAt) : undefined,
-          lastActivity: conn.lastActivity ? new Date(conn.lastActivity) : undefined,
-        }));
-        setConnections(connectionsWithDates);
-      } catch (error) {
-        console.error('Error loading connections:', error);
-      }
+  const addConnection = useCallback(async (host: SSHHost) => {
+    // Check if already connected
+    if (connections.some(c => c.hostId === host.id && c.status === 'connected')) {
+      return;
     }
-  }, []);
 
-  // Save connections to localStorage whenever connections change
-  useEffect(() => {
-    localStorage.setItem('ssh-connections', JSON.stringify(connections));
-  }, [connections]);
-
-  const addConnection = (hostId: string) => {
     const newConnection: SSHConnection = {
       id: crypto.randomUUID(),
-      hostId,
+      hostId: host.id,
       status: 'connecting',
       connectedAt: new Date(),
     };
-    
+
     setConnections(prev => [...prev, newConnection]);
-    setConnectionHistory(prev => [...prev, newConnection]);
-    
-    // Simulate connection process
-    setTimeout(() => {
-      setConnections(prev => 
-        prev.map(conn => 
-          conn.id === newConnection.id 
-            ? { ...conn, status: 'connected', lastActivity: new Date() }
+
+    try {
+      const result = await window.electronAPI.connectSSH({
+        host: host.hostname,
+        port: host.port,
+        username: host.username,
+        password: host.password,
+        privateKey: host.privateKey,
+      });
+
+      if (result.success && result.connectionId) {
+        setConnections(prev =>
+          prev.map(conn =>
+            conn.id === newConnection.id
+              ? { ...conn, id: result.connectionId!, status: 'connected', lastActivity: new Date() }
+              : conn
+          )
+        );
+
+        toast({
+          title: "SSH Connection Established",
+          description: `Connected to ${host.hostname}`,
+        });
+
+        return result.connectionId;
+      } else {
+        throw new Error(result.error || 'Connection failed');
+      }
+    } catch (error) {
+      setConnections(prev =>
+        prev.map(conn =>
+          conn.id === newConnection.id
+            ? { ...conn, status: 'error' }
             : conn
         )
       );
-      
+
       toast({
-        title: "SSH Connection Established",
-        description: `Connected to host`,
+        title: "Connection Failed",
+        description: (error as Error).message,
+        variant: "destructive",
       });
-    }, 1500);
+    }
+  }, [connections]);
 
-    // Auto-disconnect after 5 minutes for demo purposes
-    const autoDisconnectTimeout = setTimeout(() => {
-      setConnections(prev => prev.filter(conn => conn.id !== newConnection.id));
-      toast({
-        title: "SSH Connection Auto-closed",
-        description: `Connection closed after 5 minutes for security`,
-      });
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return newConnection.id;
-  };
-
-  const updateConnectionStatus = (connectionId: string, status: SSHConnection['status']) => {
-    setConnections(prev => 
-      prev.map(conn => 
-        conn.id === connectionId 
-          ? { 
-              ...conn, 
-              status,
-              lastActivity: status === 'connected' ? new Date() : conn.lastActivity
-            }
-          : conn
-      )
-    );
-  };
-
-  const removeConnection = (connectionId: string) => {
-    const connection = connections.find(c => c.id === connectionId);
-    if (connection) {
+  const removeConnection = useCallback(async (connectionId: string) => {
+    try {
+      await window.electronAPI.disconnectSSH(connectionId);
       setConnections(prev => prev.filter(conn => conn.id !== connectionId));
       toast({
         title: "SSH Connection Closed",
-        description: `Disconnected from host`,
+        description: "Disconnected from host",
       });
+    } catch (error) {
+      console.error('Error disconnecting:', error);
     }
-  };
+  }, []);
 
-  const getActiveConnections = () => {
-    return connections.filter(conn => conn.status === 'connected');
-  };
-
-  const getConnectionByHostId = (hostId: string) => {
+  const getConnectionByHostId = useCallback((hostId: string) => {
     return connections.find(conn => conn.hostId === hostId && conn.status === 'connected');
-  };
+  }, [connections]);
 
-  const isHostConnected = (hostId: string) => {
+  const isHostConnected = useCallback((hostId: string) => {
     return connections.some(conn => conn.hostId === hostId && conn.status === 'connected');
-  };
+  }, [connections]);
 
-  const disconnectHost = (hostId: string) => {
+  const disconnectHost = useCallback((hostId: string) => {
     const connection = connections.find(conn => conn.hostId === hostId && conn.status === 'connected');
     if (connection) {
       removeConnection(connection.id);
     }
-  };
+  }, [connections, removeConnection]);
 
   return {
     connections,
     connectionHistory,
     addConnection,
-    updateConnectionStatus,
     removeConnection,
-    getActiveConnections,
     getConnectionByHostId,
     isHostConnected,
     disconnectHost,

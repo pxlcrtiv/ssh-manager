@@ -48,18 +48,24 @@ cd ssh-manager
 # Install dependencies
 npm install
 
-# Start development server
-npm run dev
+### Quick Start (Desktop App)
+
+```bash
+# Install dependencies
+npm install
+
+# Start Electron app in development mode
+npm run electron
 ```
 
 ### Build for Production
 
 ```bash
-# Build the application
+# Build the application (Renderer + Main)
 npm run build
 
-# Preview production build
-npm run preview
+# Package for distribution (Mac/Windows/Linux)
+npm run electron:build
 ```
 
 ## 🎯 Usage
