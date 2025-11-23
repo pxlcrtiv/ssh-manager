@@ -7,7 +7,9 @@
         "sourceMap": true,
         "strict": true,
         "noImplicitAny": false,
-        "esModuleInterop": true
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "skipLibCheck": true
     },
     "include": [
         "electron/**/*"
