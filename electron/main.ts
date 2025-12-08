@@ -1,8 +1,13 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
 import { setupDialogHandlers } from './dialogs.js';
+
+// ES module polyfills for __dirname and __filename
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 // Note: electron-squirrel-startup is only needed for Windows NSIS installers
