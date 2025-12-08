@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { Client } from 'ssh2';
 import { randomUUID } from 'crypto';
-import { setupDialogHandlers } from './dialogs';
+import { setupDialogHandlers } from './dialogs.js';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 // Note: electron-squirrel-startup is only needed for Windows NSIS installers
