@@ -5,9 +5,11 @@ import { randomUUID } from 'crypto';
 import { setupDialogHandlers } from './dialogs';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
-}
+// Note: electron-squirrel-startup is only needed for Windows NSIS installers
+// Commented out for ES module compatibility - re-enable with dynamic import if needed
+// if ((await import('electron-squirrel-startup')).default) {
+//   app.quit();
+// }
 
 let mainWindow: BrowserWindow | null = null;
 
