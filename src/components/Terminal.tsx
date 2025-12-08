@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { SSHHost } from '@/types/ssh';
-import { Terminal as XTerm } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import 'xterm/css/xterm.css';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Terminal as TerminalIcon, X } from 'lucide-react';
