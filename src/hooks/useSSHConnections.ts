@@ -86,6 +86,10 @@ export const useSSHConnections = () => {
     return connections.some(conn => conn.hostId === hostId && conn.status === 'connected');
   }, [connections]);
 
+  const getActiveConnections = useCallback(() => {
+    return connections.filter(conn => conn.status === 'connected');
+  }, [connections]);
+
   const disconnectHost = useCallback((hostId: string) => {
     const connection = connections.find(conn => conn.hostId === hostId && conn.status === 'connected');
     if (connection) {
@@ -101,5 +105,6 @@ export const useSSHConnections = () => {
     getConnectionByHostId,
     isHostConnected,
     disconnectHost,
+    getActiveConnections,
   };
 };
