@@ -75,42 +75,66 @@ interface SSHSession {
 const sshSessions = new Map<string, SSHSession>();
 
 ipcMain.handle('ssh:connect', async (event, config) => {
+  const connectionId = randomUUID();
+
   return new Promise((resolve, reject) => {
-    const conn = new Client();
-    const connectionId = randomUUID();
+    try {
+      const conn = new Client();
+      
+      // Log connection attempt
+      console.log(`Attempting SSH connection to ${config.hostname}:${config.port} with ID: ${connectionId}`);
+      
+      conn
+        .on('ready', () => {
+          console.log(`SSH connection established with ID: ${connectionId}`);
+          
+          conn.shell((err, stream) => {
+            if (err) {
+              console.error(`Error creating shell for connection ${connectionId}:`, err);
+              reject({ success: false, error: err.message });
+              return;
+            }
 
-    conn.on('ready', () => {
-      conn.shell((err: Error | undefined, stream: any) => {
-        if (err) {
-          conn.end();
-          return reject({ success: false, error: err.message });
-        }
+            // Store the session with connectionId
+            sshSessions.set(connectionId, { client: conn, stream });
 
-        // Store connection and stream
-        sshSessions.set(connectionId, { client: conn, stream });
+            // Handle data from stream - real SSH output
+            stream.on('data', (data: Buffer) => {
+              if (!mainWindow?.isDestroyed() && connectionId) {
+                // Send raw SSH output to renderer
+                event.sender.send('terminal:data', { connectionId, data: data.toString() });
+              }
+            });
 
-        // Handle data from stream
-        stream.on('data', (data: Buffer) => {
-          if (mainWindow) {
-            // We need to send to the specific window, but here we only have one
-            // Ideally we should use event.sender
-            event.sender.send('terminal:data', data.toString());
-          }
+            stream.on('close', () => {
+              console.log(`SSH connection closed for ID: ${connectionId}`);
+              conn.end();
+              sshSessions.delete(connectionId);
+              if (!mainWindow?.isDestroyed() && connectionId) {
+                event.sender.send('terminal:data', { connectionId, data: '\r\nConnection closed.\r\n' });
+              }
+            });
+
+            resolve({ success: true, connectionId });
+          });
+        })
+        .on('error', (err: Error) => {
+          console.error(`SSH connection error for ID ${connectionId}:`, err);
+          reject({ success: false, error: err.message });
+        })
+        .connect({
+          host: config.hostname,
+          port: config.port,
+          username: config.username,
+          password: config.password,
+          privateKey: config.privateKey,
+          keepaliveInterval: 30000,
+          readyTimeout: 20000
         });
-
-        stream.on('close', () => {
-          conn.end();
-          sshSessions.delete(connectionId);
-          if (!mainWindow?.isDestroyed()) {
-            event.sender.send('terminal:data', '\r\nConnection closed.\r\n');
-          }
-        });
-
-        resolve({ success: true, connectionId });
-      });
-    }).on('error', (err: Error) => {
-      reject({ success: false, error: err.message });
-    }).connect(config);
+    } catch (error) {
+      console.error(`Unexpected error in SSH connection for ID ${connectionId}:`, error);
+      reject({ success: false, error: (error as Error).message });
+    }
   });
 });
 

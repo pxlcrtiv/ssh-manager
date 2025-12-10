@@ -3,8 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
     connectSSH: (config: any) => ipcRenderer.invoke('ssh:connect', config),
     disconnectSSH: (connectionId: string) => ipcRenderer.invoke('ssh:disconnect', connectionId),
-    onTerminalData: (callback: (data: string) => void) => {
-        const subscription = (_event: any, data: string) => callback(data);
+    onTerminalData: (callback: ({ connectionId, data }: { connectionId: string; data: string }) => void) => {
+        const subscription = (_event: any, terminalData: { connectionId: string; data: string }) => callback(terminalData);
         ipcRenderer.on('terminal:data', subscription);
         return () => ipcRenderer.removeListener('terminal:data', subscription);
     },

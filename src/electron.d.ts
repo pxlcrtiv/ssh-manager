@@ -1,7 +1,7 @@
 export interface ElectronAPI {
     connectSSH: (config: any) => Promise<{ success: boolean; connectionId?: string; error?: string }>;
     disconnectSSH: (connectionId: string) => Promise<{ success: boolean; error?: string }>;
-    onTerminalData: (callback: (data: string) => void) => () => void;
+    onTerminalData: (callback: ({ connectionId, data }: { connectionId: string; data: string }) => void) => () => void;
     sendTerminalData: (connectionId: string, data: string) => void;
     initSFTP: (connectionId: string) => Promise<{ success: boolean; error?: string }>;
     listDirectory: (connectionId: string, path: string) => Promise<{ success: boolean; files?: any[]; error?: string }>;

@@ -20,45 +20,16 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { sanitizeInput } from '@/lib/securityUtils';
 
 interface TerminalProps {
   host: SSHHost;
   onClose: () => void;
 }
 
-// Mock command responses for simulation
-const mockCommandResponses: Record<string, (...args: any[]) => string> = {
-  'ls': () => `total 20
-drwxr-xr-x  5 user  staff   160 Jan 22 14:30 .
-drwxr-xr-x  3 user  staff    96 Jan 20 09:15 ..
-drwxr-xr-x  3 user  staff    96 Jan 21 16:45 documents
--rw-r--r--  1 user  staff  2048 Jan 22 14:20 config.json
--rwxr-xr-x  1 user  staff  1024 Jan 21 10:15 script.sh
-drwxr-xr-x  2 user  staff    64 Jan 19 11:30 logs`,
-  'pwd': (args: string[], path: string) => path,
-  'whoami': (args: string[], path: string, host: SSHHost) => host.username,
-  'date': () => new Date().toString(),
-  'uname': () => `Darwin hostname.local 22.1.0 Darwin Kernel Version 22.1.0: Sun Oct  9 20:15:09 PDT 2022; root:xnu-8792.41.9~2/RELEASE_ARM64_T8103 arm64`,
-  'echo': (args: string[]) => args.join(' '),
-  'help': () => `Available commands:
-  ls       - List directory contents
-  cd       - Change directory
-  pwd      - Print working directory
-  whoami   - Print current username
-  date     - Display current date and time
-  uname    - Print system information
-  echo     - Display a line of text
-  clear    - Clear the terminal screen
-  exit     - Exit the terminal
-  help     - Display this help message`,
-  'clear': () => '',
-  'exit': () => 'Exiting terminal...'
-};
+// No more mock responses - we'll use real SSH commands
 
 export const Terminal = ({ host, onClose }: TerminalProps) => {
   const { addConnection, removeConnection, isHostConnected, getConnectionByHostId } = useSSHConnections();
-  const [currentPath, setCurrentPath] = useState('/home/user');
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [output, setOutput] = useState<{ type: 'output' | 'input'; content: string }[]>([]);
@@ -66,36 +37,65 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState('/');
   const terminalRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLDivElement>(null);
+  const subscriptionRef = useRef<() => void | undefined>();
+  const currentConnectionIdRef = useRef<string | null>(null);
+
+  // Update ref whenever connectionId changes to avoid closure issues
+  useEffect(() => {
+    currentConnectionIdRef.current = connectionId;
+  }, [connectionId]);
 
   // Establish connection when component mounts
   useEffect(() => {
     const connectToHost = async () => {
       try {
         setConnectionStatus('connecting');
+        setConnectionId(undefined);
         
-        // Simulate connection process
-        setTimeout(() => {
-          if (!isHostConnected(host.id)) {
-            addConnection(host.id);
-          }
+        // Establish real SSH connection with proper configuration
+        const connId = await addConnection(host);
+        if (connId) {
+          setConnectionId(connId);
           setConnectionStatus('connected');
           
-          // Add welcome message to terminal output
-          setOutput([
-            ...output,
-            { 
-              type: 'output', 
-              content: `Welcome to SSH Terminal\nConnected to ${host.username}@${host.hostname}:${host.port}\nType 'help' to see available commands.\n` 
-            }
-          ]);
-        }, 1000);
+          // Set up listener for terminal data
+          if (window.electronAPI) {
+            subscriptionRef.current = window.electronAPI.onTerminalData((eventData: any) => {
+              try {
+                // Comprehensive validation of incoming terminal data
+                if (eventData && typeof eventData === 'object' && 'connectionId' in eventData) {
+                  const receivedConnectionId = String(eventData.connectionId);
+                  const currentConnId = currentConnectionIdRef.current;
+                  
+                  // Only process data for the current active connection
+                  if (currentConnId && receivedConnectionId === currentConnId) {
+                    const dataContent = eventData.data ? String(eventData.data) : '';
+                    if (dataContent) {
+                      setOutput(prev => [...prev, { type: 'output', content: dataContent }]);
+                    }
+                  }
+                } else if (eventData !== undefined && eventData !== null) {
+                  // Handle unexpected data format gracefully
+                  console.warn('Received malformed terminal data:', eventData);
+                }
+              } catch (error) {
+                console.error('Error processing terminal data:', error);
+              }
+            });
+          }
+        } else {
+          throw new Error('Failed to get connection ID');
+        }
       } catch (error) {
         setConnectionStatus('error');
+        setConnectionId(undefined);
         toast({
           title: "Connection Failed",
-          description: "Could not establish SSH connection",
+          description: error instanceof Error ? error.message : 'Unknown connection error',
           variant: "destructive",
         });
       }
@@ -105,12 +105,14 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
 
     // Cleanup function to close connection when component unmounts
     return () => {
-      const connection = getConnectionByHostId(host.id);
-      if (connection) {
-        removeConnection(connection.id);
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+      }
+      if (connectionId) {
+        removeConnection(connectionId);
       }
     };
-  }, [host, addConnection, removeConnection, isHostConnected, getConnectionByHostId]);
+  }, [host, addConnection, removeConnection]);
 
   // Auto-scroll to bottom of terminal when output changes
   useEffect(() => {
@@ -126,128 +128,48 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
       handleCommandSubmit();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      navigateHistory('up');
+      setHistoryIndex(prev => {
+        const newIndex = prev < history.length - 1 ? prev + 1 : prev;
+        setCommand(history[newIndex] || '');
+        return newIndex;
+      });
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      navigateHistory('down');
+      setHistoryIndex(prev => {
+        const newIndex = prev > 0 ? prev - 1 : -1;
+        setCommand(newIndex >= 0 ? history[newIndex] : '');
+        return newIndex;
+      });
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setShowContextMenu(false);
     }
   };
 
-  // Handle command history navigation
-  const navigateHistory = (direction: 'up' | 'down') => {
-    if (direction === 'up') {
-      if (history.length > 0) {
-        const newIndex = historyIndex < history.length - 1 ? historyIndex + 1 : history.length - 1;
-        setHistoryIndex(newIndex);
-        setCommand(history[newIndex]);
-      }
-    } else {
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setCommand(history[newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setCommand('');
-      }
-    }
-  };
-
   // Handle command execution
   const handleCommandSubmit = () => {
-    if (!command.trim()) return;
+    if (!command.trim() || !window.electronAPI) return;
+
+    const currentConnId = currentConnectionIdRef.current;
+    if (!currentConnId) return;
 
     // Add command to history
     const newHistory = [command, ...history].slice(0, 50); // Keep only last 50 commands
     setHistory(newHistory);
     setHistoryIndex(-1);
 
-    // Add command to output
-    const commandToExecute = command.trim();
-    setOutput(prev => [...prev, { type: 'input', content: commandToExecute }]);
+    // Add command to output with prompt format
+    setOutput(prev => [...prev, { type: 'input', content: command }]);
 
-    // Process command
-    setTimeout(() => {
-      processCommand(commandToExecute);
-    }, 100);
+    // Send command to SSH terminal with proper newline
+    window.electronAPI.sendTerminalData(currentConnId, command + '\n');
 
     setCommand('');
   };
 
-  // Process and execute commands
-  const processCommand = (cmd: string) => {
-    const [commandName, ...args] = cmd.split(/\s+/);
-    
-    // Sanitize command input
-    const sanitizedCommand = sanitizeInput(commandName);
-    
-    try {
-      // Handle special commands first
-      if (sanitizedCommand === 'cd') {
-        handleChangeDirectory(args);
-        return;
-      }
-      
-      // Handle clear command separately to clear the output
-      if (sanitizedCommand === 'clear') {
-        setOutput([]);
-        return;
-      }
-      
-      // Handle exit command
-      if (sanitizedCommand === 'exit') {
-        onClose();
-        return;
-      }
-      
-      // Check if command exists in mock responses
-      if (sanitizedCommand in mockCommandResponses) {
-        // Call the mock command with appropriate arguments based on its actual implementation
-        let response: string;
-        if (sanitizedCommand === 'pwd') {
-          response = mockCommandResponses[sanitizedCommand](args, currentPath);
-        } else if (sanitizedCommand === 'whoami') {
-          response = mockCommandResponses[sanitizedCommand](args, currentPath, host);
-        } else {
-          response = mockCommandResponses[sanitizedCommand](args);
-        }
-        setOutput(prev => [...prev, { type: 'output', content: response }]);
-      } else {
-        // Command not found
-        setOutput(prev => [...prev, { type: 'output', content: `Command not found: ${commandName}` }]);
-      }
-    } catch (error) {
-      setOutput(prev => [...prev, { type: 'output', content: `Error: ${(error as Error).message}` }]);
-    }
-  };
+  // No need for processCommand function - SSH server handles all commands
 
-  // Handle change directory command
-  const handleChangeDirectory = (args: string[]) => {
-    let newPath = currentPath;
-    
-    if (args.length === 0 || args[0] === '~') {
-      newPath = '/home/user';
-    } else if (args[0] === '..') {
-      // Navigate up one directory
-      const pathParts = currentPath.split('/');
-      if (pathParts.length > 1) {
-        pathParts.pop();
-        newPath = pathParts.join('/') || '/';
-      }
-    } else if (args[0].startsWith('/')) {
-      // Absolute path
-      newPath = args[0];
-    } else {
-      // Relative path
-      newPath = `${currentPath}/${args[0]}`.replace(/\/\//g, '/'); // Remove double slashes
-    }
-    
-    setCurrentPath(newPath);
-    setOutput(prev => [...prev, { type: 'output', content: '' }]); // Empty output for cd command
-  };
+  // No need for handleChangeDirectory - SSH server handles directory navigation
 
   // Handle right-click context menu
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -281,17 +203,27 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
     setShowContextMenu(false);
   };
 
-  // Render terminal prompt
+  // Render terminal prompt - simple input prompt since SSH server will show actual prompt
   const renderPrompt = () => {
     return (
-      <div className="flex items-center text-primary font-mono">
-        <span>{host.username}@${host.hostname}:</span>
+      <div className="flex items-center font-mono">
         <span className="text-accent mx-1">{currentPath}</span>
-        <span className="text-primary">$</span>
-        <span className="ml-2 text-foreground flex-1 whitespace-pre-wrap" ref={inputRef}>
-          {command}
-          <span className="animate-pulse">|</span>
-        </span>
+        <span className="text-muted-foreground">$</span>
+        <span 
+          className="ml-2 text-primary flex-1 whitespace-pre-wrap"
+          ref={inputRef}
+          contentEditable
+          suppressContentEditableWarning={true}
+          onKeyDown={handleKeyDown}
+          onInput={(e) => setCommand((e.target as HTMLElement).innerText)}
+          onClick={() => {
+            // Focus the cursor when clicking on the prompt
+            if (inputRef.current) {
+              inputRef.current.focus();
+            }
+          }}
+        />
+        <span className="animate-pulse">|</span>
       </div>
     );
   };
@@ -309,7 +241,7 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
   const handleDownloadOutput = () => {
     const allOutput = output.map(item => {
       if (item.type === 'input') {
-        return `${host.username}@${host.hostname}:${currentPath}$ ${item.content}`;
+        return item.content;
       }
       return item.content;
     }).join('\n');
@@ -403,13 +335,13 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
             <div key={index} className={item.type === 'input' ? 'font-bold' : 'text-foreground'}>
               {item.type === 'input' ? (
                 <div className="flex">
-                  <span className="text-primary">{host.username}@${host.hostname}:</span>
+                  <span className="text-primary">{host.username}@{host.hostname}:</span>
                   <span className="text-accent mx-1">{currentPath}</span>
                   <span className="text-primary">$</span>
                   <span className="ml-2 text-foreground flex-1 whitespace-pre-wrap">{item.content}</span>
                 </div>
               ) : (
-                <div className="whitespace-pre-wrap">{item.content}</div>
+                <pre className="whitespace-pre-wrap">{item.content}</pre>
               )}
             </div>
           ))}
@@ -421,7 +353,6 @@ export const Terminal = ({ host, onClose }: TerminalProps) => {
       <div className="border-t border-border bg-card/90 backdrop-blur-sm px-4 py-1.5 text-xs flex items-center justify-between text-muted-foreground">
         <div className="flex items-center gap-4">
           <span>Connected to {host.hostname}</span>
-          <span>Path: {currentPath}</span>
         </div>
         <div className="hidden sm:flex items-center gap-4">
           <span>Press 'Ctrl+C' to cancel</span>
